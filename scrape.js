@@ -4,7 +4,16 @@ const _ = require("lodash"),
 		lib = require(__dirname + "/lib/scraperLib.js"),
 		ProgressBar = require("progress"),
 		Table = require(__dirname + "/models/base.js").Base,
-		cheerio = require("cheerio");
+		cheerio = require("cheerio"),
+		moment = require("moment"),
+		now = moment();
+
+
+Number.prototype.zeroPad = function (places) {
+	const num = this,
+		zero = places - num.toString().length + 1;
+	return Array(+(zero > 0 && zero)).join("0") + num;
+};
 
 
 /* BEGIN SCRAPER HERE */
@@ -104,20 +113,26 @@ const processPage = (year, page) => {
 		}
 
 		records += people.length;
-		return payroll.create(people);
+		return payroll.upsert(people);
 	});
 };
 
 const go = async (year) => {
 	const total_pages = await getPageCount(year),
-		bar = new ProgressBar(':year | :records records | :current of :total pages | :rate pages/sec | :bar :percent', { total: total_pages });
+		bar = new ProgressBar(':year | :time | :current of :total pages | :bar :percent', { total: total_pages });
 
 	async.eachLimit(range_array(0, total_pages), 10, (page, nextPage) => {
 		processPage(year, page).then((results) => {
 			records += results.success.length;
+			const diff = moment().diff(now),
+				hours = moment.duration(diff).hours().zeroPad(2),
+				minutes = moment.duration(diff).minutes().zeroPad(2),
+				seconds = moment.duration(diff).seconds().zeroPad(2),
+				diffDisplay = `${hours}:${minutes}:${seconds}`;
 			bar.tick({
 				year: year,
-				records: records
+				records: records,
+				time: diffDisplay
 			});
 			nextPage();
 		}).catch((err) => {
